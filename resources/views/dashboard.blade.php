@@ -119,7 +119,7 @@
             <!-- Latest Devices Status -->
             <div class="bg-surface-container-lowest p-5 md:p-6 rounded-[1.5rem] md:rounded-[2rem] shadow-sm md:shadow-[0_8px_32px_rgba(43,88,37,0.04)] border border-outline-variant/5">
                 <h4 class="text-base md:text-md font-bold text-primary font-headline mb-4">Status Perangkat</h4>
-                <div class="space-y-3 md:space-y-4">
+                <div class="space-y-3 md:space-y-4" id="device-status-list">
                     @forelse(App\Models\Device::latest()->take(3)->get() as $device)
                     <div class="flex items-center justify-between p-3 bg-surface-container-low rounded-2xl">
                         <div class="flex items-center gap-3">
@@ -142,7 +142,7 @@
                     @endforelse
                 </div>
                 <div class="mt-4 text-center">
-                    <a href="{{ route('devices.index') }}" class="text-[10px] md:text-xs font-bold text-primary hover:underline">Lihat Semua ({{ $deviceCount }})</a>
+                    <a href="{{ route('devices.index') }}" id="device-list-link" class="text-[10px] md:text-xs font-bold text-primary hover:underline">Lihat Semua ({{ $deviceCount }})</a>
                 </div>
             </div>
 
@@ -207,7 +207,7 @@
             const colorSecondary = '#adcbda'; // secondary-fixed-dim
             const colorSecondaryHover = '#466270'; // secondary
 
-            new Chart(ctx, {
+            window.sensorChart = new Chart(ctx, {
                 type: 'bar',
                 data: {
                     labels: labels,
@@ -332,6 +332,59 @@
                         });
                         tableBody.innerHTML = html;
                     }
+
+                    // Update chart
+                    if (data.chartData && window.sensorChart) {
+                        window.sensorChart.data.labels = data.chartData.map(d => {
+                            const date = new Date(d.hour_time);
+                            return date.getHours() + ':00';
+                        });
+                        window.sensorChart.data.datasets[0].data = data.chartData.map(d => d.avg_temperature);
+                        window.sensorChart.data.datasets[1].data = data.chartData.map(d => d.avg_humidity);
+                        window.sensorChart.data.datasets[2].data = data.chartData.map(d => d.avg_co2);
+                        window.sensorChart.update();
+                    }
+
+                    // Update devices list
+                    if (data.devices) {
+                        const deviceList = document.getElementById('device-status-list');
+                        if (data.devices.length > 0) {
+                            let deviceHtml = '';
+                            data.devices.forEach(device => {
+                                const isActive = device.status === 'active';
+                                const bgClass = isActive ? 'bg-primary-container' : 'bg-error';
+                                const badgeHtml = isActive 
+                                    ? '<span class="px-2 py-1 bg-primary/10 text-primary text-[9px] md:text-[10px] font-bold rounded-lg shrink-0">AKTIF</span>'
+                                    : '<span class="px-2 py-1 bg-error/10 text-error text-[9px] md:text-[10px] font-bold rounded-lg shrink-0">MATI</span>';
+
+                                deviceHtml += `
+                                <div class="flex items-center justify-between p-3 bg-surface-container-low rounded-2xl">
+                                    <div class="flex items-center gap-3">
+                                        <div class="w-8 h-8 md:w-10 md:h-10 rounded-full ${bgClass} flex items-center justify-center text-white shrink-0">
+                                            <span class="material-symbols-outlined text-[16px]">router</span>
+                                        </div>
+                                        <div class="min-w-0">
+                                            <p class="text-xs md:text-sm font-semibold truncate">${device.name}</p>
+                                            <p class="text-[9px] md:text-[10px] text-secondary truncate">${device.short_id}</p>
+                                        </div>
+                                    </div>
+                                    ${badgeHtml}
+                                </div>
+                                `;
+                            });
+                            deviceList.innerHTML = deviceHtml;
+                        } else {
+                            deviceList.innerHTML = '<p class="text-[10px] md:text-xs text-secondary text-center py-4">Belum ada perangkat terdaftar.</p>';
+                        }
+                    }
+
+                    // Update device count
+                    if (data.stats.device_count !== undefined) {
+                        const deviceLink = document.getElementById('device-list-link');
+                        if (deviceLink) {
+                            deviceLink.textContent = `Lihat Semua (${data.stats.device_count})`;
+                        }
+                        }
                 } catch (error) {
                     console.error('Error fetching real-time data:', error);
                 }

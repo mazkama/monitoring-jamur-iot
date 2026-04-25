@@ -51,6 +51,24 @@ class DashboardController extends Controller
             ];
         });
 
+        // Chart Data (Last 24 hours of averages)
+        $chartData = SensorLogHourly::with('device')
+            ->orderBy('hour_time', 'asc')
+            ->take(24)
+            ->get();
+
+        // Add latest devices
+        $latestDevices = Device::latest()->take(3)->get()->map(function($device) {
+            return [
+                'id' => $device->id,
+                'name' => $device->name,
+                'status' => $device->status,
+                'short_id' => substr($device->id, 0, 15)
+            ];
+        });
+
+        $deviceCount = Device::count();
+
         return response()->json([
             'stats' => [
                 'temperature' => $latestEnv ? number_format($latestEnv->temperature, 1) : '--',
@@ -59,8 +77,11 @@ class DashboardController extends Controller
                 'device_name' => $latestEnv ? $latestEnv->device->name : 'N/A',
                 'last_seen' => $latestEnv ? $latestEnv->created_at->diffForHumans() : 'N/A',
                 'unresolved_alerts' => $unresolvedAlerts,
+                'device_count' => $deviceCount,
             ],
-            'logs' => $latestLogs
+            'logs' => $latestLogs,
+            'chartData' => $chartData,
+            'devices' => $latestDevices
         ]);
     }
 }
