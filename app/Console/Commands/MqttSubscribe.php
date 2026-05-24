@@ -5,6 +5,7 @@ namespace App\Console\Commands;
 use App\Models\Alert;
 use App\Models\Device;
 use App\Models\SensorLog;
+use App\Services\TelegramService;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Cache;
@@ -229,6 +230,52 @@ class MqttSubscribe extends Command
                 'value'       => $value,
                 'condition'   => $condition,
             ]);
+
+            // Kirim notifikasi ke Telegram
+            try {
+                $device = Device::find($deviceId);
+                $deviceName = $device ? $device->name : $deviceId;
+
+                $sensorNames = [
+                    'temperature' => 'Suhu 🌡️',
+                    'humidity'    => 'Kelembaban 💧',
+                    'co2'         => 'Kadar CO2 💨',
+                ];
+                $sensorName = $sensorNames[$sensorType] ?? $sensorType;
+
+                $conditionText = '';
+                if ($condition === 'above_max') {
+                    $conditionText = "Melebihi batas maksimal (> {$max} " . ($sensorType === 'temperature' ? '°C' : ($sensorType === 'humidity' ? '%' : 'ppm')) . ")";
+                } elseif ($condition === 'below_min') {
+                    $conditionText = "Kurang dari batas minimal (< {$min} " . ($sensorType === 'temperature' ? '°C' : ($sensorType === 'humidity' ? '%' : 'ppm')) . ")";
+                } else {
+                    $conditionText = "Di luar batas normal ({$min} - {$max})";
+                }
+
+                $tempVal = isset($data['temperature']) ? $data['temperature'] . ' °C' : '-';
+                $humVal  = isset($data['humidity']) ? $data['humidity'] . ' %' : '-';
+                $co2Val  = isset($data['co2']) ? $data['co2'] . ' ppm' : '-';
+
+                $tempMinMax = (isset($data['temp_min']) && isset($data['temp_max'])) ? $data['temp_min'] . ' - ' . $data['temp_max'] . ' °C' : '-';
+                $humMinMax  = (isset($data['hum_min']) && isset($data['hum_max'])) ? $data['hum_min'] . ' - ' . $data['hum_max'] . ' %' : '-';
+                $co2MinMax  = (isset($data['co2_min']) && isset($data['co2_max'])) ? $data['co2_min'] . ' - ' . $data['co2_max'] . ' ppm' : '-';
+
+                $telegramMessage = "⚠️ <b>ALERT BARU TERDETEKSI!</b>\n\n" .
+                    "<b>Perangkat:</b> " . htmlspecialchars($deviceName) . " (ID: " . htmlspecialchars($deviceId) . ")\n" .
+                    "<b>Penyebab Alert:</b> " . htmlspecialchars($sensorName) . " " . htmlspecialchars($conditionText) . "\n\n" .
+                    "<b>Detail Sensor & Threshold:</b>\n" .
+                    "• <b>Suhu:</b> " . htmlspecialchars($tempVal) . " (Batas: " . htmlspecialchars($tempMinMax) . ")\n" .
+                    "• <b>Kelembaban:</b> " . htmlspecialchars($humVal) . " (Batas: " . htmlspecialchars($humMinMax) . ")\n" .
+                    "• <b>Kadar CO2:</b> " . htmlspecialchars($co2Val) . " (Batas: " . htmlspecialchars($co2MinMax) . ")\n\n" .
+                    "<b>Waktu:</b> " . $now->toDateTimeString();
+
+                TelegramService::sendMessage($telegramMessage);
+            } catch (\Throwable $te) {
+                Log::error('[MQTT] Gagal mengirim alert ke Telegram', [
+                    'device_id' => $deviceId,
+                    'error'     => $te->getMessage(),
+                ]);
+            }
         }
     }
 }
