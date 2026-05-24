@@ -99,14 +99,37 @@ class DeviceController extends Controller
     public function update(Request $request, Device $device)
     {
         $validated = $request->validate([
-            'name' => 'required|string|max:255',
+            'name'     => 'required|string|max:255',
             'location' => 'required|string|max:255',
-            'status' => 'required|in:active,inactive',
+            'status'   => 'required|in:active,inactive',
         ]);
 
         $device->update($validated);
 
-        return redirect()->route('devices.index')->with('success', 'Device updated successfully.');
+        // Publish ulang config ke MQTT agar device_name ikut terupdate
+        try {
+            $thresholds = Threshold::where('device_id', $device->id)
+                ->where('is_active', true)
+                ->get()
+                ->keyBy('sensor_type');
+
+            app(MqttService::class)->publishDeviceConfig($device->id, [
+                'device_name' => $device->name,
+                'temp_min'    => (float) ($thresholds->get('temperature')?->min_value ?? 0),
+                'temp_max'    => (float) ($thresholds->get('temperature')?->max_value ?? 0),
+                'hum_min'     => (float) ($thresholds->get('humidity')?->min_value    ?? 0),
+                'hum_max'     => (float) ($thresholds->get('humidity')?->max_value    ?? 0),
+                'co2_min'     => (float) ($thresholds->get('co2')?->min_value         ?? 0),
+                'co2_max'     => (float) ($thresholds->get('co2')?->max_value         ?? 0),
+            ]);
+        } catch (\Throwable $e) {
+            Log::error('[MQTT] Gagal publish config saat update device', [
+                'device_id' => $device->id,
+                'error'     => $e->getMessage(),
+            ]);
+        }
+
+        return redirect()->route('devices.index')->with('success', 'Device berhasil diperbarui dan config dikirim ke device.');
     }
 
     public function destroy(Device $device)
