@@ -70,7 +70,7 @@
                 <span>Dashboard</span>
             </a>
             <a href="{{ route('devices.index') }}" class="flex items-center gap-3 px-4 py-3 rounded-lg hover:translate-x-1 transition-transform duration-200 cursor-pointer active:scale-98 {{ request()->routeIs('devices.*') ? 'bg-[#43713b] text-white shadow-sm' : 'text-[#466270] hover:bg-[#43713b]/5' }}">
-                <span class="material-symbols-outlined" data-icon="settings_input_component">settings_input_component</span>
+                <span class="material-symbols-outlined" data-icon="settings_input_component">router</span>
                 <span>Perangkat</span>
             </a>
             @if(auth()->user() && auth()->user()->role === 'admin')
