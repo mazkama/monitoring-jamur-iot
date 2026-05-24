@@ -61,7 +61,7 @@
                         <th class="px-6 py-3 text-secondary font-bold text-xs md:text-sm uppercase tracking-widest">ID Perangkat</th>
                         <th class="px-6 py-3 text-secondary font-bold text-xs md:text-sm uppercase tracking-widest">Nama Lokasi</th>
                         <th class="px-6 py-3 text-secondary font-bold text-xs md:text-sm uppercase tracking-widest text-center">Status</th>
-                        <th class="px-6 py-3 text-secondary font-bold text-xs md:text-sm uppercase tracking-widest text-center">Transmisi Data</th>
+                        <th class="px-6 py-3 text-secondary font-bold text-xs md:text-sm uppercase tracking-widest text-center">Monitoring</th>
                         <th class="px-6 py-3 text-secondary font-bold text-xs md:text-sm uppercase tracking-widest text-right">Aksi</th>
                     </tr>
                 </thead>
@@ -95,12 +95,20 @@
                                 </span>
                             @endif
                         </td>
-                        <td class="px-6 py-3 text-sm text-center">
-                            <form action="{{ route('devices.toggle', $device) }}" method="POST">
+                        <td class="px-6 py-3 text-center">
+                            {{-- Toggle Switch ON/OFF --}}
+                            <form action="{{ route('devices.toggle', $device) }}" method="POST" class="inline-flex items-center gap-2">
                                 @csrf
-                                <button type="submit" class="{{ $device->status == 'active' ? 'text-primary border-primary' : 'text-secondary border-secondary' }} border px-3 py-1 rounded-full text-xs font-bold hover:bg-surface-container transition-colors">
-                                    Ganti Status
+                                <button type="submit"
+                                        title="{{ $device->status == 'active' ? 'Klik untuk MATIKAN monitoring' : 'Klik untuk AKTIFKAN monitoring' }}"
+                                        class="relative inline-flex items-center w-12 h-6 rounded-full transition-all duration-300 focus:outline-none
+                                               {{ $device->status == 'active' ? 'bg-primary shadow-inner' : 'bg-slate-300' }}">
+                                    <span class="absolute left-0.5 w-5 h-5 rounded-full bg-white shadow-md transform transition-transform duration-300
+                                                 {{ $device->status == 'active' ? 'translate-x-6' : 'translate-x-0' }}"></span>
                                 </button>
+                                <span class="text-xs font-bold {{ $device->status == 'active' ? 'text-primary' : 'text-slate-400' }}">
+                                    {{ $device->status == 'active' ? 'ON' : 'OFF' }}
+                                </span>
                             </form>
                         </td>
                         <td class="px-6 py-3 text-right space-x-1">

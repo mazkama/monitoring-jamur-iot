@@ -105,7 +105,7 @@ class MqttSubscribe extends Command
             $device = Device::find($deviceId);
 
             if (!$device) {
-                $this->warn("[MQTT] Device '{$deviceId}' TIDAK terdaftar. Data diabaikan. Daftarkan device terlebih dahulu di menu Devices.");
+                $this->warn("[MQTT] Device '{$deviceId}' TIDAK terdaftar. Data diabaikan.");
                 Log::warning('[MQTT] Data dari device tidak dikenal diabaikan', [
                     'device_id' => $deviceId,
                     'topic'     => $topic,
@@ -113,9 +113,10 @@ class MqttSubscribe extends Command
                 return;
             }
 
-            // 2. Update status device menjadi aktif (jika sebelumnya inactive)
-            if ($device->status !== 'active') {
-                $device->update(['status' => 'active']);
+            // 2. Jika device dimatikan (inactive), abaikan data — hormati pilihan user
+            if ($device->status === 'inactive') {
+                $this->line("[MQTT] Device '{$deviceId}' sedang OFF. Data sensor dilewati.");
+                return;
             }
 
             // 3. Simpan SensorLog
