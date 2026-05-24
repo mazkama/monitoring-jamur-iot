@@ -21,9 +21,15 @@ class DashboardController extends Controller
         $latestLogs = SensorLog::with('device')->latest()->paginate(10);
 
         // Chart Data (Last 24 hours of averages)
-        $chartData = SensorLogHourly::with('device')
+        $chartData = SensorLog::selectRaw('
+                DATE_FORMAT(created_at, "%Y-%m-%d %H:00:00") as hour_time,
+                AVG(temperature) as avg_temperature,
+                AVG(humidity) as avg_humidity,
+                AVG(co2) as avg_co2
+            ')
+            ->where('created_at', '>=', now()->subHours(24))
+            ->groupBy('hour_time')
             ->orderBy('hour_time', 'asc')
-            ->take(24)
             ->get();
 
         return view('dashboard', compact(
@@ -35,11 +41,11 @@ class DashboardController extends Controller
         ));
     }
 
-    public function apiData()
+    public function apiData(Request $request)
     {
         $unresolvedAlerts = Alert::where('status', 'unresolved')->count();
         $latestEnv = SensorLog::with('device')->latest()->first();
-        
+
         // Get the latest 10 logs for real-time table update (if on page 1)
         $latestLogs = SensorLog::with('device')->latest()->limit(10)->get()->map(function($log) {
             return [
@@ -51,10 +57,45 @@ class DashboardController extends Controller
             ];
         });
 
-        // Chart Data (Last 24 hours of averages)
-        $chartData = SensorLogHourly::with('device')
+        // Timeframe-aware chart data
+        $timeframe = $request->query('timeframe', '24h');
+        switch ($timeframe) {
+            case '1h':
+                $since = now()->subHour();
+                $format = '%Y-%m-%d %H:%i:00';
+                $groupExpr = 'DATE_FORMAT(created_at, "%Y-%m-%d %H:%i:00")';
+                break;
+            case '6h':
+                $since = now()->subHours(6);
+                $format = '%Y-%m-%d %H:%i:00';
+                $groupExpr = 'DATE_FORMAT(DATE_SUB(created_at, INTERVAL MINUTE(created_at) % 5 MINUTE), "%Y-%m-%d %H:%i:00")';
+                break;
+            case '12h':
+                $since = now()->subHours(12);
+                $format = '%Y-%m-%d %H:00:00';
+                $groupExpr = 'DATE_FORMAT(created_at, "%Y-%m-%d %H:00:00")';
+                break;
+            case '7d':
+                $since = now()->subDays(7);
+                $format = '%Y-%m-%d %H:00:00';
+                $groupExpr = 'DATE_FORMAT(DATE_SUB(created_at, INTERVAL HOUR(created_at) % 6 HOUR), "%Y-%m-%d %H:00:00")';
+                break;
+            default: // 24h
+                $since = now()->subHours(24);
+                $format = '%Y-%m-%d %H:00:00';
+                $groupExpr = 'DATE_FORMAT(created_at, "%Y-%m-%d %H:00:00")';
+                break;
+        }
+
+        $chartData = SensorLog::selectRaw("
+                {$groupExpr} as hour_time,
+                AVG(temperature) as avg_temperature,
+                AVG(humidity) as avg_humidity,
+                AVG(co2) as avg_co2
+            ")
+            ->where('created_at', '>=', $since)
+            ->groupBy('hour_time')
             ->orderBy('hour_time', 'asc')
-            ->take(24)
             ->get();
 
         // Add latest devices
@@ -81,7 +122,8 @@ class DashboardController extends Controller
             ],
             'logs' => $latestLogs,
             'chartData' => $chartData,
-            'devices' => $latestDevices
+            'devices' => $latestDevices,
+            'timeframe' => $timeframe,
         ]);
     }
 }

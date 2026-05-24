@@ -46,7 +46,7 @@ class SensorLogController extends Controller
                     'device_id' => $device->id,
                     'sensor_type' => $threshold->sensor_type,
                     'value' => $value,
-                    'condition' => 'above_max',
+                    'condition' => 'above_max', 
                     'status' => 'unresolved',
                 ]);
             } elseif ($value < $threshold->min_value) {
