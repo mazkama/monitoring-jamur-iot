@@ -4,7 +4,9 @@ namespace App\Http\Controllers;
 
 use App\Models\Device;
 use App\Models\Threshold;
+use App\Services\MqttService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Log;
 
 class ThresholdController extends Controller
 {
@@ -46,6 +48,9 @@ class ThresholdController extends Controller
             }
         }
 
+        // Publish konfigurasi ke device via MQTT
+        $this->publishConfigToDevice($request->device_id);
+
         return redirect()->route('thresholds.index')->with('success', 'Konfigurasi Threshold Perangkat berhasil disimpan.');
     }
 
@@ -70,5 +75,37 @@ class ThresholdController extends Controller
     {
         $threshold->delete();
         return redirect()->route('thresholds.index')->with('success', 'Setting Threshold dihapus.');
+    }
+
+    /**
+     * Publish konfigurasi aktif device ke MQTT topic config.
+     */
+    protected function publishConfigToDevice(string $deviceId): void
+    {
+        try {
+            $device     = Device::find($deviceId);
+            $thresholds = Threshold::where('device_id', $deviceId)
+                ->where('is_active', true)
+                ->get()
+                ->keyBy('sensor_type');
+
+            $config = [
+                'device_name' => $device->name ?? $deviceId,
+                'co2_min'     => (float) ($thresholds->get('co2')?->min_value         ?? 0),
+                'co2_max'     => (float) ($thresholds->get('co2')?->max_value         ?? 0),
+                'temp_min'    => (float) ($thresholds->get('temperature')?->min_value ?? 0),
+                'temp_max'    => (float) ($thresholds->get('temperature')?->max_value ?? 0),
+                'hum_min'     => (float) ($thresholds->get('humidity')?->min_value    ?? 0),
+                'hum_max'     => (float) ($thresholds->get('humidity')?->max_value    ?? 0),
+            ];
+
+            app(MqttService::class)->publishDeviceConfig($deviceId, $config);
+
+        } catch (\Throwable $e) {
+            Log::error('[MQTT] Gagal publish config dari ThresholdController', [
+                'device_id' => $deviceId,
+                'error'     => $e->getMessage(),
+            ]);
+        }
     }
 }
