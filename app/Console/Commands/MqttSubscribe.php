@@ -89,17 +89,24 @@ class MqttSubscribe extends Command
         }
 
         try {
-            // 1. Upsert Device
-            $device = Device::updateOrCreate(
-                ['id' => $deviceId],
-                [
-                    'name'     => $data['device_name'] ?? $deviceId,
-                    'status'   => 'active',
-                    'location' => '-',     // default, bisa diubah manual di halaman device
-                ]
-            );
+            // 1. Cek apakah device sudah terdaftar di sistem
+            $device = Device::find($deviceId);
 
-            // 2. Simpan SensorLog
+            if (!$device) {
+                $this->warn("[MQTT] Device '{$deviceId}' TIDAK terdaftar. Data diabaikan. Daftarkan device terlebih dahulu di menu Devices.");
+                Log::warning('[MQTT] Data dari device tidak dikenal diabaikan', [
+                    'device_id' => $deviceId,
+                    'topic'     => $topic,
+                ]);
+                return;
+            }
+
+            // 2. Update status device menjadi aktif (jika sebelumnya inactive)
+            if ($device->status !== 'active') {
+                $device->update(['status' => 'active']);
+            }
+
+            // 3. Simpan SensorLog
             $now = Carbon::now();
             SensorLog::create([
                 'device_id'   => $deviceId,
