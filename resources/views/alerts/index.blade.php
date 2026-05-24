@@ -61,16 +61,6 @@
             </div>
         </div>
 
-        @if(session('success'))
-            <div x-data="{ show: true }" x-show="show" x-init="setTimeout(() => show = false, 4000)"
-                 x-transition:leave="transition ease-in duration-300"
-                 x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0"
-                 class="flex items-center gap-2 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl px-4 py-3 mb-4 text-sm font-bold shadow-sm">
-                <span class="material-symbols-outlined text-[20px]" style="font-variation-settings:'FILL' 1">check_circle</span>
-                {{ session('success') }}
-            </div>
-        @endif
-
         <!-- Notification Log List -->
         <div class="space-y-3">
             @forelse($alerts as $alert)
