@@ -39,6 +39,7 @@ Route::middleware(['auth'])->group(function () {
     // Alerts
     Route::get('alerts', [AlertController::class, 'index'])->name('alerts.index');
     Route::post('alerts/{alert}/resolve', [AlertController::class, 'resolve'])->name('alerts.resolve');
+    Route::post('alerts/resolve-all', [AlertController::class, 'resolveAll'])->name('alerts.resolve-all');
 
     // Admin Only
     Route::middleware(['role:admin'])->group(function () {

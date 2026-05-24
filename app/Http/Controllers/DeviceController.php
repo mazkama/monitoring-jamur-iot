@@ -6,7 +6,9 @@ use App\Models\Device;
 use App\Models\Threshold;
 use App\Services\MqttService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Validation\ValidationException;
 
 class DeviceController extends Controller
 {

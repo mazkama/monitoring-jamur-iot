@@ -39,16 +39,37 @@
             </div>
         </div>
 
-        <!-- Filters (Visual only for now, adapting to generic style) -->
+        <!-- Filters + Resolve All Button -->
         <div class="flex items-center gap-2 mb-6 overflow-x-auto pb-2 scrollbar-hide">
             <button class="px-6 py-2 bg-primary text-white rounded-full text-sm font-medium shadow-sm transition-all whitespace-nowrap">Semua Notifikasi</button>
-            <div class="ml-auto">
+            <div class="ml-auto flex items-center gap-3">
+                @if($kritis > 0)
+                    <form action="{{ route('alerts.resolve-all') }}" method="POST"
+                          onsubmit="return confirm('Selesaikan semua {{ $kritis }} alert yang belum diselesaikan?')">
+                        @csrf
+                        <button type="submit"
+                                class="flex items-center gap-2 px-5 py-2 bg-error text-white rounded-full text-sm font-bold shadow-md hover:bg-error/80 active:scale-95 transition-all whitespace-nowrap">
+                            <span class="material-symbols-outlined text-sm" style="font-variation-settings:'FILL' 1">done_all</span>
+                            Selesaikan Semua ({{ $kritis }})
+                        </button>
+                    </form>
+                @endif
                 <span class="text-primary text-sm font-semibold flex items-center gap-1">
                     <span class="material-symbols-outlined text-sm" data-icon="history">history</span>
                     Riwayat Sistem
                 </span>
             </div>
         </div>
+
+        @if(session('success'))
+            <div x-data="{ show: true }" x-show="show" x-init="setTimeout(() => show = false, 4000)"
+                 x-transition:leave="transition ease-in duration-300"
+                 x-transition:leave-start="opacity-100" x-transition:leave-end="opacity-0"
+                 class="flex items-center gap-2 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl px-4 py-3 mb-4 text-sm font-bold shadow-sm">
+                <span class="material-symbols-outlined text-[20px]" style="font-variation-settings:'FILL' 1">check_circle</span>
+                {{ session('success') }}
+            </div>
+        @endif
 
         <!-- Notification Log List -->
         <div class="space-y-3">

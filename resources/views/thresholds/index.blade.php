@@ -37,14 +37,6 @@
             </div>
         </div>
 
-        @if(session('success'))
-            <div x-data="{ show: true }" x-show="show" x-init="setTimeout(() => show = false, 3000)"
-                 class="flex items-center gap-2 bg-emerald-50 border border-emerald-200 text-emerald-700 rounded-xl px-4 py-3 text-sm font-bold shadow-sm">
-                <span class="material-symbols-outlined text-[20px]">check_circle</span>
-                {{ session('success') }}
-            </div>
-        @endif
-
         <!-- Filter Bar -->
         <div class="bg-surface-container-low p-4 rounded-2xl mb-8 flex items-center justify-between border border-outline-variant/5">
             <div class="flex gap-4">

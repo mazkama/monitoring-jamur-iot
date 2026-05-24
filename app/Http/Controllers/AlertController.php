@@ -18,6 +18,15 @@ class AlertController extends Controller
         $alert->status = 'resolved';
         $alert->save();
 
-        return back()->with('success', 'Alert marked as resolved.');
+        return back()->with('success', 'Alert berhasil diselesaikan.');
+    }
+
+    public function resolveAll()
+    {
+        $count = Alert::where('status', 'unresolved')->count();
+        Alert::where('status', 'unresolved')->update(['status' => 'resolved']);
+
+        return back()->with('success', "{$count} alert berhasil diselesaikan semua.");
     }
 }
+

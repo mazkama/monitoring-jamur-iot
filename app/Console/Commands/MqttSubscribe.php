@@ -5,10 +5,9 @@ namespace App\Console\Commands;
 use App\Models\Alert;
 use App\Models\Device;
 use App\Models\SensorLog;
-use App\Models\Threshold;
-use App\Services\MqttService;
 use Carbon\Carbon;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 use PhpMqtt\Client\ConnectionSettings;
 use PhpMqtt\Client\MqttClient;
@@ -17,6 +16,9 @@ class MqttSubscribe extends Command
 {
     protected $signature   = 'mqtt:subscribe';
     protected $description = 'Subscribe ke MQTT broker dan simpan data sensor ke database (daemon)';
+
+    /** Cooldown alert dalam menit – tidak buat alert baru jika kondisi sama masih aktif */
+    protected int $alertCooldownMinutes = 30;
 
     public function handle(): int
     {
@@ -88,6 +90,16 @@ class MqttSubscribe extends Command
             return;
         }
 
+        // ── Simpan device ke cache sebagai "pernah terdeteksi" (TTL 24 jam) ──
+        // Digunakan untuk validasi saat mendaftarkan device baru di form
+        Cache::put("mqtt_seen:{$deviceId}", [
+            'device_name' => $data['device_name'] ?? $deviceId,
+            'firmware'    => $data['firmware']    ?? '-',
+            'ip'          => $data['ip']          ?? '-',
+            'rssi'        => $data['rssi']        ?? null,
+            'last_seen'   => now()->toDateTimeString(),
+        ], now()->addHours(24));
+
         try {
             // 1. Cek apakah device sudah terdaftar di sistem
             $device = Device::find($deviceId);
@@ -124,7 +136,7 @@ class MqttSubscribe extends Command
                 $data['co2']         ?? 0
             ));
 
-            // 3. Proses Alert dari payload device
+            // 4. Proses Alert dari payload device (dengan anti-spam cooldown)
             $this->processAlerts($deviceId, $data, $now);
 
         } catch (\Throwable $e) {
@@ -138,7 +150,9 @@ class MqttSubscribe extends Command
     }
 
     /**
-     * Buat Alert berdasarkan flag dari payload device.
+     * Buat Alert dengan logik anti-spam:
+     * Hanya buat alert baru jika tidak ada alert UNRESOLVED untuk
+     * device + sensor_type + condition yang sama dalam cooldown terakhir.
      */
     protected function processAlerts(string $deviceId, array $data, Carbon $now): void
     {
@@ -146,40 +160,35 @@ class MqttSubscribe extends Command
             'temp_alert' => [
                 'sensor_type' => 'temperature',
                 'value'       => $data['temperature'] ?? 0,
-                'temp_min'    => $data['temp_min']    ?? null,
-                'temp_max'    => $data['temp_max']    ?? null,
+                'min_key'     => 'temp_min',
+                'max_key'     => 'temp_max',
             ],
             'hum_alert'  => [
                 'sensor_type' => 'humidity',
                 'value'       => $data['humidity']    ?? 0,
-                'hum_min'     => $data['hum_min']     ?? null,
-                'hum_max'     => $data['hum_max']     ?? null,
+                'min_key'     => 'hum_min',
+                'max_key'     => 'hum_max',
             ],
             'co2_alert'  => [
                 'sensor_type' => 'co2',
                 'value'       => $data['co2']         ?? 0,
-                'co2_min'     => $data['co2_min']     ?? null,
-                'co2_max'     => $data['co2_max']     ?? null,
+                'min_key'     => 'co2_min',
+                'max_key'     => 'co2_max',
             ],
         ];
 
         foreach ($alertMap as $flag => $info) {
+            // Lewati jika flag alert tidak aktif dari device
             if (!($data[$flag] ?? false)) {
                 continue;
             }
 
             $sensorType = $info['sensor_type'];
             $value      = $info['value'];
+            $min        = $data[$info['min_key']] ?? null;
+            $max        = $data[$info['max_key']] ?? null;
 
-            // Tentukan kondisi berdasarkan min/max dari payload
-            $minKey    = $sensorType === 'temperature' ? 'temp_min'
-                       : ($sensorType === 'humidity'   ? 'hum_min' : 'co2_min');
-            $maxKey    = $sensorType === 'temperature' ? 'temp_max'
-                       : ($sensorType === 'humidity'   ? 'hum_max' : 'co2_max');
-
-            $min       = $data[$minKey] ?? null;
-            $max       = $data[$maxKey] ?? null;
-
+            // Tentukan kondisi berdasarkan nilai min/max
             $condition = 'out_of_range';
             if ($max !== null && $value > $max) {
                 $condition = 'above_max';
@@ -187,6 +196,22 @@ class MqttSubscribe extends Command
                 $condition = 'below_min';
             }
 
+            // ── Anti-spam: jangan buat alert baru selama masih ada yang UNRESOLVED ──
+            // Alert baru hanya dibuat setelah operator menyelesaikan alert sebelumnya
+            $alreadyActive = Alert::where('device_id',   $deviceId)
+                ->where('sensor_type', $sensorType)
+                ->where('status',      'unresolved')
+                ->exists();
+
+            if ($alreadyActive) {
+                $this->line(sprintf(
+                    "[MQTT] Alert %s(%s) sudah aktif — dilewati (cooldown %d mnt)",
+                    $sensorType, $condition, $this->alertCooldownMinutes
+                ));
+                continue;
+            }
+
+            // Buat alert baru
             Alert::create([
                 'device_id'   => $deviceId,
                 'sensor_type' => $sensorType,
@@ -196,7 +221,7 @@ class MqttSubscribe extends Command
                 'created_at'  => $now,
             ]);
 
-            $this->warn("[MQTT] Alert dibuat | {$sensorType} = {$value} | kondisi: {$condition}");
+            $this->warn("[MQTT] ⚠ Alert BARU | {$sensorType} = {$value} | kondisi: {$condition}");
             Log::warning('[MQTT] Alert created', [
                 'device_id'   => $deviceId,
                 'sensor_type' => $sensorType,
